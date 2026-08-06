@@ -156,9 +156,25 @@ async def slot_job(context: ContextTypes.DEFAULT_TYPE):
     await frage_stellen(context.bot, chat_id, context.job.data)
 
 
-async def frage_stellen(bot, chat_id: int, slot: str):
-    storage.set_pending(chat_id, slot, heute_fuer(chat_id))
-    await bot.send_message(chat_id, prompts.frage(slot))
+async def frage_stellen(bot, chat_id: int, slot: str, datum: str | None = None) -> bool:
+    """Frage senden und erst DANACH als offen vermerken.
+
+    Reihenfolge ist wichtig: bei einem Sendefehler (DNS weg, Nutzer hat den Bot
+    blockiert) darf keine offene Frage zurueckbleiben - sonst wartet der Bot auf
+    die Antwort zu einer Frage, die nie angekommen ist, und die naechste
+    Nachricht des Nutzers wird faelschlich als diese Antwort einsortiert.
+
+    `datum` mitgeben, wenn die Frage zu einem bestimmten Tag gehoert (die
+    Schlaf-Frage haengt am Morgen-Eintrag, auch kurz nach Mitternacht).
+    """
+    try:
+        await bot.send_message(chat_id, prompts.frage(slot))
+    except Exception as e:
+        log.warning("Frage '%s' an %s nicht zustellbar: %s: %s",
+                    slot, chat_id, type(e).__name__, e)
+        return False
+    storage.set_pending(chat_id, slot, datum or heute_fuer(chat_id))
+    return True
 
 
 # ---------- Zeitplan: Erinnerungen ----------
@@ -312,8 +328,9 @@ async def _antwort_auf_frage(update, context, chat_id, slot, datum, roh):
     folge = prompts.NAECHSTER_SLOT.get(slot)
     if folge:
         await update.message.reply_text("Got it. ✍️")
-        storage.set_pending(chat_id, folge, datum)
-        await context.bot.send_message(chat_id, prompts.frage(folge))
+        # Auch hier: erst senden, dann vormerken (siehe frage_stellen).
+        # datum mitgeben: der Schlaf-Eintrag gehoert zum selben Tag wie der Morgen.
+        await frage_stellen(context.bot, chat_id, folge, datum)
     else:
         await update.message.reply_text(f"Saved to {datum}. ✍️")
 
@@ -717,8 +734,7 @@ async def restore_and_catch_up(application: Application):
             if rest:
                 hinweis += f"\n(Offen waeren auch: {', '.join(rest)} — /nachtrag)"
             await application.bot.send_message(chat_id, hinweis)
-            storage.set_pending(chat_id, slot, datum)
-            await application.bot.send_message(chat_id, prompts.frage(slot))
+            await frage_stellen(application.bot, chat_id, slot, datum)
         except Exception as e:
             log.warning("Nachholen fuer %s fehlgeschlagen: %s", chat_id, e)
 
