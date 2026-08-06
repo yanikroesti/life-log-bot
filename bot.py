@@ -24,10 +24,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import NetworkError, TimedOut
 from telegram.ext import (
     Application,
+    ApplicationHandlerStop,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -56,6 +58,32 @@ logging.basicConfig(
 # Bot-Token niemals in Konsole oder journal landet.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("lifelog")
+
+
+# ---------- Zugang ----------
+# Der Bot schreibt in EINEN Obsidian-Vault. Eintraege sind nicht nach Benutzer
+# getrennt - wer den Bot bedienen darf, schreibt also in denselben Vault.
+# Darum: nur ausdruecklich erlaubte Chats bedienen.
+#   LIFELOG_ALLOWED=123456789          (mehrere mit Komma trennen)
+ERLAUBT: set[int] = set()
+
+
+def _lade_erlaubte() -> set[int]:
+    roh = (os.environ.get("LIFELOG_ALLOWED") or "").replace(";", ",")
+    return {int(t.strip()) for t in roh.split(",") if t.strip().lstrip("-").isdigit()}
+
+
+def erlaubt(chat_id: int) -> bool:
+    """Leere Liste = alle erlaubt (alte Konfiguration), sonst nur die Liste."""
+    return not ERLAUBT or chat_id in ERLAUBT
+
+
+async def zugang_pruefen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Laeuft vor allen anderen Handlern (Gruppe -1) und bricht Fremde ab."""
+    chat = update.effective_chat
+    if chat and not erlaubt(chat.id):
+        log.warning("Abgewiesen: chat_id=%s (@%s)", chat.id, chat.username)
+        raise ApplicationHandlerStop
 
 
 # ---------- Zeitzonen ----------
@@ -103,6 +131,9 @@ def schedule_user(application: Application, chat_id: int):
             job.schedule_removal()
 
     if not user or not user["aktiv"]:
+        return
+    if not erlaubt(chat_id):
+        log.info("Kein Zeitplan fuer nicht erlaubte chat_id %s", chat_id)
         return
 
     tz = tz_for(user.get("tz") or STANDARD_TZ)
@@ -641,6 +672,8 @@ async def restore_and_catch_up(application: Application):
 
     # --- Erinnerungen ---
     for r in storage.all_active_reminders():
+        if not erlaubt(r["chat_id"]):
+            continue
         if schedule_reminder(application, r):
             continue
         # Einmaliger Termin war faellig, waehrend der Bot aus war.
@@ -654,6 +687,8 @@ async def restore_and_catch_up(application: Application):
 
     # --- Tagesfragen ---
     for chat_id in storage.all_active_users():
+        if not erlaubt(chat_id):
+            continue
         user = storage.get_user(chat_id)
         if not user or not user["aktiv"]:
             continue
@@ -742,6 +777,9 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("erinnere", cmd_erinnere))
     app.add_handler(CommandHandler("erinnerungen", cmd_erinnerungen))
+    # Gruppe -1 laeuft vor allem anderen: Fremde kommen gar nicht erst durch.
+    app.add_handler(TypeHandler(Update, zugang_pruefen), group=-1)
+
     app.add_handler(CommandHandler("loeschen", cmd_loeschen))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
@@ -754,6 +792,17 @@ async def run():
     nicht mehr automatisch gibt)."""
     storage.init()
     load_api_key()
+
+    global ERLAUBT
+    ERLAUBT = _lade_erlaubte()
+    if ERLAUBT:
+        log.info("Zugang nur fuer: %s", ", ".join(str(i) for i in sorted(ERLAUBT)))
+    else:
+        log.warning(
+            "LIFELOG_ALLOWED ist nicht gesetzt - JEDER, der den Bot findet, kann "
+            "in deinen Vault schreiben. Setze z. B. LIFELOG_ALLOWED=123456789"
+        )
+
     log.info("Vault-Wurzel: %s", vault.VAULT_ROOT)
     if not vault.DAILY_DIR.exists():
         log.warning("Ordner 'Daily Notes' fehlt unter %s - stimmt LIFELOG_VAULT?",

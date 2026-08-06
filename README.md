@@ -158,6 +158,22 @@ Jede Antwort liegt in **zwei** unabhängigen Orten: als Rohtext in `lifelog.db` 
 
 ---
 
+## Zugang beschränken (wichtig)
+
+Der Bot schreibt in **einen** Vault — Einträge sind nicht nach Benutzer getrennt. Wer den Bot bedienen darf, schreibt also in *deine* Daily Notes. Telegram-Bots sind über ihren Namen auffindbar, also kann jeder `/start` drücken.
+
+Deshalb in `~/.lifelog.env` (bzw. als Umgebungsvariable) festlegen, wer darf:
+
+```
+LIFELOG_ALLOWED=123456789
+```
+
+Mehrere mit Komma trennen. Alle anderen werden stillschweigend abgewiesen (Log-Eintrag `Abgewiesen: chat_id=…`) und bekommen keine Fragen.
+
+Ist die Variable **nicht** gesetzt, warnt der Bot beim Start und lässt jeden durch — nur für den ersten Testlauf sinnvoll.
+
+Deine eigene chat_id steht im Log, sobald du `/start` drückst.
+
 ## Kosten
 
 Vier Einträge am Tag plus ein paar Erinnerungen über Claude Haiku 4.5 ($1 / $5 pro Mio. Token) — grob **0.15–0.25 CHF im Monat**.

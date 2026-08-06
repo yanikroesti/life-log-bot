@@ -133,11 +133,13 @@ Der Sync ist eingerichtet, daran ist nichts zu tun. Nur eins im Hinterkopf behal
 cd "/home/yanik/Documents/Obsidian Vault/Life/Life Log"
 chmod 600 token.txt anthropic-key.txt
 
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > ~/.lifelog.env
+printf 'ANTHROPIC_API_KEY=sk-ant-api03-DEIN_KEY\nLIFELOG_ALLOWED=DEINE_CHAT_ID\n' > ~/.lifelog.env
 chmod 600 ~/.lifelog.env
 ```
 
 Der Key gehört **nicht** in die systemd-Unit: Dateien unter `/etc/systemd/system/` sind für alle lesbar, `systemctl cat lifelog` würde ihn im Klartext zeigen.
+
+> ⚠️ **`LIFELOG_ALLOWED` nicht vergessen.** Ohne diese Zeile kann jeder, der den Bot in Telegram findet, `/start` drücken — und seine Antworten landen in *deiner* Daily Note. Deine chat_id siehst du im Log, sobald du `/start` schickst. Format wie beim Key: Name, `=`, Wert — keine Leerzeichen, keine Anführungszeichen.
 
 ## B2 — Python-Umgebung
 
