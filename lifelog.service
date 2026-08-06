@@ -1,0 +1,25 @@
+[Unit]
+Description=Life Log Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/yanik/Documents/Obsidian Vault/Life/Life Log
+Environment=PYTHONIOENCODING=utf-8
+
+# Vault-Wurzel. Der Bot leitet sie zwar selbst aus seinem Ordner ab, aber
+# explizit ist es eindeutig. Muss der Ordner sein, den dein Sync hochlaedt.
+Environment=LIFELOG_VAULT=/home/yanik/Documents/Obsidian Vault
+
+# Der Anthropic-API-Key gehoert NICHT in diese Datei: Units unter
+# /etc/systemd/system/ sind fuer alle lesbar (systemctl cat zeigt sie im
+# Klartext). Stattdessen eine eigene Datei mit chmod 600.
+EnvironmentFile=/home/yanik/.lifelog.env
+
+ExecStart=/home/yanik/.lifelog-venv/bin/python "/home/yanik/Documents/Obsidian Vault/Life/Life Log/bot.py"
+Restart=always
+RestartSec=10
+User=yanik
+
+[Install]
+WantedBy=multi-user.target

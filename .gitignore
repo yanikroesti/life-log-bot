@@ -1,0 +1,19 @@
+# --- Zugangsdaten: gehoeren NIEMALS ins Repo ---
+token.txt
+anthropic-key.txt
+*.env
+.env
+
+# --- Persoenliche Daten ---
+# die Tagebuch-Eintraege
+lifelog.db
+lifelog.db-journal
+# Sicherungskopien der Daily Notes
+backups/
+Entries/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+venv/
+.venv/
